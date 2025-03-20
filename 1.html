@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT 发送/接收 消息</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+</head>
+<body>
+    <h2>MQTT 发送消息到 `topic/beginfirefox` 并监听 `topic/beginfirefox/response`</h2>
+
+    <label for="message">消息内容：</label>
+    <input type="text" id="message" value="Open Firefox"><br><br>
+
+    <button onclick="sendMessage()">发送 MQTT 消息</button>
+
+    <h3>状态:</h3>
+    <p id="status">未连接</p>
+
+    <h3>发送日志:</h3>
+    <pre id="log"></pre>
+
+    <h3>接收的响应消息:</h3>
+    <pre id="response"></pre>
+
+    <script>
+        // MQTT 服务器 WebSocket 地址（注意路径后要加 "/mqtt"）
+        const broker = "ws://192.168.57.231:8083/mqtt";  // 你的 MQTT 服务器地址（WebSocket）
+        const topicSend = "topic/beginfirefox"; // 发送主题
+        const topicResponse = "topic/beginfirefox/response"; // 订阅的响应主题
+        const clientId = "mqtt_client_" + Math.random().toString(16).substr(2, 8); // 生成唯一 Client ID
+
+        // 创建 MQTT 客户端
+        const options = {
+            clean: true,
+            connectTimeout: 4000,
+            clientId: clientId,
+        };
+
+        const client = mqtt.connect(broker, options);
+
+        // 更新状态
+        function updateStatus(statusText) {
+            document.getElementById("status").textContent = statusText;
+        }
+
+        function logMessage(msg) {
+            document.getElementById("log").textContent += msg + "\n";
+        }
+
+        function logResponse(msg) {
+            document.getElementById("response").textContent += msg + "\n";
+        }
+
+        // 连接成功
+        client.on("connect", () => {
+            updateStatus("✅ 已连接");
+            logMessage("已成功连接到 MQTT 服务器");
+
+            // 订阅 `topic/beginfirefox/response` 以接收返回消息
+            client.subscribe(topicResponse, (err) => {
+                if (!err) {
+                    logMessage(`📥 已订阅: ${topicResponse}`);
+                } else {
+                    logMessage("❌ 订阅失败: " + err.message);
+                }
+            });
+        });
+
+        // 连接失败
+        client.on("error", (err) => {
+            updateStatus("❌ 连接失败");
+            logMessage("连接失败: " + err.message);
+        });
+
+        // 处理接收到的消息
+        client.on("message", (receivedTopic, message) => {
+            if (receivedTopic === topicResponse) {
+                logResponse(`📩 收到响应: ${message.toString()}`);
+            }
+        });
+
+        // 发送 MQTT 消息
+        function sendMessage() {
+            const message = document.getElementById("message").value;
+
+            if (client.connected) {
+                client.publish(topicSend, message, { qos: 0 }, (err) => {
+                    if (!err) {
+                        logMessage(`📤 已发送: ${message}`);
+                        alert("消息发送成功");
+                    } else {
+                        logMessage("❌ 发送失败: " + err.message);
+                        alert("消息发送失败，请检查 MQTT 服务器");
+                    }
+                });
+            } else {
+                alert("MQTT 未连接，请稍后重试");
+                logMessage("⚠️ 发送失败：未连接到 MQTT 服务器");
+            }
+        }
+    </script>
+</body>
+</html>
